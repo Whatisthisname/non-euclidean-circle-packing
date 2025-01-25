@@ -1,3 +1,5 @@
+## [Link to interactive page here](https://whatisthisname.github.io/non-euclidean-circle-packing/)
+
 #### Using `Rapier2D` physics engine to approximately get good circle packings in a local-coordinate system representation of a 2D Manifold. Play for yourself:
 
 ![image](https://github.com/user-attachments/assets/eff8788e-2bd9-4c82-9b91-57420b7b5943)

@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Non-Euclidean Circle Packing</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: start;
+        }
+
+        #controls {
+            margin: 1em;
+        }
+
+        #canvasContainer {
+            position: relative;
+            width: 800px;
+            /* Adjust as desired */
+            height: 800px;
+            border: 1px solid #999;
+        }
+
+        #simCanvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+    </style>
+</head>
+
+<script>
+    // MathJax configuration (for version 3+)
+    window.MathJax = {
+        tex: {
+            inlineMath: [['$', '$'], ["\\(", "\\)"]]
+        },
+        svg: { fontCache: 'global' }
+    };
+</script>
+<!-- Load MathJax from a CDN. Here we use tex-chtml for typical LaTeX rendering: -->
+<script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"></script>
+
+
+<body>
+
+    <div id="controls">
+        <span>Indicatrices:</span>
+        <input type="number" id="ellipseCountInput" min="1" max="1000" value="50">
+        <button id="ellipseCountInputSubmit">Update</button>
+        <span> . . . . . </span>
+        <span>Controls:</span>
+
+        <button id="addEllipseBtn">+ Ellipse</button>
+        <button id="removeEllipseBtn">- Ellipse</button>
+        <button id="scaleUpBtn">Scale +</button>
+        <button id="scaleDownBtn">Scale -</button>
+        <button id="resetBtn">Reset</button>
+        <span id="ellipseCountSpan"></span>
+    </div>
+
+    <div id="canvasContainer">
+        <canvas id="simCanvas" width="800" height="800"></canvas>
+    </div>
+    <div id="metricControls">
+        <!-- dropdown menu to choose presets -->
+        <div>
+            <label for="metric">Metric:</label>
+            <select id="metric">
+                <option value="1">Projected Gaussian</option>
+                <option value="2">Projected Quadratic Function</option>
+                <option value="3">Hyperbolic Space Subset</option>
+            </select>
+        </div>
+        <div>
+            <label> M<sub>11</sub>(x,y):
+                <input id="m11Input" value="0.1 + x*x + y*y" size="20">
+            </label>
+            <label> M<sub>12</sub>(x,y):
+                <input id="m12Input" value="0" size="5">
+            </label>
+            <label> M<sub>22</sub>(x,y):
+                <input id="m22Input" value="0.1 + x*x + y*y" size="20">
+            </label>
+        </div>
+        <button id="updateMatrixBtn">Update Matrix</button>
+    </div>
+
+    <!-- Where we'll show the LaTeX preview: -->
+    <div id="matrixPreview" style="margin-top: 10px; font-size: 1.2em;"></div>
+
+
+    <script src="./script.js" type="module"></script>
+</body>
+
+</html>

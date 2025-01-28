@@ -1,0 +1,79 @@
+#grid-container {
+    display: grid;
+    grid-template-columns: 10vw 40vw 40vw 10vw;
+    grid-template-rows: 40vw 70vh;
+    grid-template-areas:
+        'border-l grid-2d-viewport grid-3d-viewport border-r'
+        'border-l dummy1 dummy2 border-r';
+    gap: 4px;
+    padding: 10px;
+    width: 100vh;
+    border: 1px solid #999;
+}
+
+#grid-2d-viewport {
+    position: relative;
+    grid-area: grid-2d-viewport;
+    border: 1px solid #999;
+    background: #f2f2f2;
+    border: 1px solid #999;
+}
+
+#grid-3d-viewport {
+    position: relative;
+    grid-area: grid-3d-viewport;
+    border: 1px solid #999;
+    background: #f2f2f2;
+    border: 1px solid #999;
+}
+
+#dummy1 {
+    grid-area: dummy1;
+    border: 1px solid #999;
+    background: #f2f2f2;
+    border: 1px solid #999;
+}
+
+#dummy2 {
+    grid-area: dummy2;
+    border: 1px solid #999;
+    background: #f2f2f2;
+    border: 1px solid #999;
+}
+
+#border-r {
+    grid-area: border-r;
+    border: 1px solid #999;
+    background: #f2f2f2;
+    border: 1px solid #999;
+}
+
+#border-l {
+    grid-area: border-l;
+    border: 1px solid #999;
+    background: #f2f2f2;
+    border: 1px solid #999;
+}
+
+/* 
+
+.grid-container {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: auto auto;
+    gap: 10px;
+    max-width: 400px;
+    margin: 20px auto;
+    border: 2px solid #ccc;
+    padding: 10px;
+}
+
+.grid-item {
+    background: #f2f2f2;
+    border: 1px solid #999;
+    padding: 20px;
+    text-align: center;
+    font-size: 1.2rem;
+}
+
+*/

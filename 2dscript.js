@@ -8,7 +8,8 @@ await RAPIER.init(); // Initialize the Rapier WASM module
 // -------------------------------------------------------------------------
 // 2) Basic Setup
 // -------------------------------------------------------------------------
-const canvas = document.getElementById("simCanvas");
+const mybox = document.getElementById("grid-2d-viewport")
+const canvas = document.getElementById("2d-canvas");
 const ctx = canvas.getContext("2d");
 
 const INIT_SCALEFACTOR = 0.1
@@ -27,17 +28,31 @@ function worldToScreen(x, y) {
     return [sx, sy];
 }
 
+const resolution_factor = 3;
+function onWindowResize() {
+    canvas.width = mybox.offsetWidth * resolution_factor;
+    canvas.height = mybox.offsetHeight * resolution_factor;
+    canvas.style.width = mybox.offsetWidth + "px";
+    canvas.style.height = mybox.offsetHeight + "px";
+    //ctx.scale(resolution_factor, resolution_factor);
+}
+
+onWindowResize();
+window.addEventListener('resize', onWindowResize, false);
+
 // Convert a length in world coords to length in screen coords (for ellipse drawing).
 // This is approximate if x-scaling != y-scaling, but we keep the domain square in the canvas.
 function worldLengthToScreen(length) {
     return length * (canvas.width / 2);
 }
 
+
+
 // Store simulation parameters in a small config object
 let config = {
     ellipseCount: INIT_ELLIPSES,
     scaleFactor: INIT_SCALEFACTOR,  // uniform scale for the ellipses
-    ellipseSides: 8,  // polygon approximation resolution
+    ellipseSides: 20,  // polygon approximation resolution
 };
 
 // UI references
@@ -74,6 +89,9 @@ function setupWorld() {
     switch (selectMetric.value) {
         case "1":
         case "2":
+        case "4":
+        case "5":
+        case "6":
             // Create bounding box as 4 static walls. Domain = [-1..1] => width=2, height=2
             // We’ll make thin rectangles around the perimeter:
             const thickness = 0.01;
@@ -152,6 +170,9 @@ function createEllipseBody() {
     switch (selectMetric.value) {
         case "1":
         case "2":
+        case "4":
+        case "5":
+        case "6":
             // Random initial position within [-1..1]
             x = Math.random() * 2 - 1;
             y = Math.random() * 2 - 1;
@@ -228,8 +249,8 @@ function approximateEllipsePolygon(body_idx, nSides) {
     const lam1 = eigenvalues[0];
     const lam2 = eigenvalues[1];
     // avoid division by zero just in case
-    const scale1 = lam1 //> 1e-12 ? 1.0 / Math.sqrt(lam1) : 1e6;
-    const scale2 = lam2 //> 1e-12 ? 1.0 / Math.sqrt(lam2) : 1e6;
+    const scale1 = Math.sqrt(lam1) //> 1e-12 ? 1.0 / Math.sqrt(lam1) : 1e6;
+    const scale2 = Math.sqrt(lam2) //> 1e-12 ? 1.0 / Math.sqrt(lam2) : 1e6;
 
     // 3) Generate a circle of nSides points in local coords, then transform by the ellipse matrix
     const points = [];
@@ -239,8 +260,8 @@ function approximateEllipsePolygon(body_idx, nSides) {
         let cx = Math.cos(angle);
         let cy = Math.sin(angle);
         // Scale by Lambda^-1/2
-        cx *= scale1 * 1.05;
-        cy *= scale2 * 1.05;
+        cx *= scale1 * 1;
+        cy *= scale2 * 1;
         // Rotate by Q
         // Q is a 2x2 matrix. eigenvectors = [[vx1, vy1],[vx2, vy2]] for each eigen vector
         // We'll interpret eigenvectors as columns: Q=[v1, v2]
@@ -277,10 +298,6 @@ function eigenDecomposition2x2(M) {
     let lam1 = 0.5 * trace + disc;
     let lam2 = 0.5 * trace - disc;
 
-    console.log("Eigenvalues")
-    console.log(lam1)
-    console.log(lam2)
-
     // --- 2) Solve for v1
     const M1 = [
         [a - lam1, b],
@@ -297,17 +314,13 @@ function eigenDecomposition2x2(M) {
         v1 = [v1[0] / len1, v1[1] / len1];
     }
 
-    // console.log("lengths")
-    // console.log(Math.hypot(v1[0], v1[1]))
     // second eigenvalue will be orthogonal to v1
     let v2 = [v1[1], -v1[0]];
-    console.log(Math.hypot(v2[0], v2[1]))
 
     // --- 4) Optionally fix overall orientation so that (v1, v2) 
     //     is a right-handed coordinate system:
     const cross = v1[0] * v2[1] - v1[1] * v2[0];
     if (cross < 0) {
-        // console.log("Fixing orientation");
         v2 = [-v2[0], -v2[1]];
     }
 
@@ -316,10 +329,6 @@ function eigenDecomposition2x2(M) {
         eigenvectors: [v1, v2]
     };
 
-    // console.log("Eigenvalues")
-    console.log(obj.eigenvalues)
-    // console.log("Eigenvectors")
-    console.log(obj.eigenvectors)
     return obj;
 }
 
@@ -328,12 +337,19 @@ function eigenDecomposition2x2(M) {
 // 6) Simulation Loop & Dynamic Collider Updates
 // -------------------------------------------------------------------------
 function update() {
-    // Step the Rapier simulation
-    world.step();
+
+
+
+    if (mousedown) {
+        const closest = findClosestBody(x, y);
+        if (closest) {
+            closest.setTranslation({ x: x, y: y });
+            closest.setLinvel({ x: 0, y: 0 });
+        }
+    }
 
     // For each body, re-compute the shape from M(x,y) at its current position,
     // remove old collider, create new one.
-
     for (let body_idx = 0; body_idx < bodies.length; body_idx++) {
         const rb = bodies[body_idx];
         const col = colliders[body_idx];
@@ -379,15 +395,77 @@ function update() {
         colliders[body_idx] = newCol;
     }
 
+
+
+
     draw();
+    // Step the Rapier simulation
+    world.step();
     requestAnimationFrame(update);
 }
+
+function findClosestBody(x, y) {
+    let closest = null;
+    let min_dist = 1e6;
+    for (let body_idx = 0; body_idx < bodies.length; body_idx++) {
+        const rb = bodies[body_idx];
+        const { x: bx, y: by } = rb.translation();
+        const dist = Math.hypot(bx - x, by - y);
+        if (dist < min_dist) {
+            min_dist = dist;
+            closest = rb;
+        }
+    }
+    return closest;
+}
+
+
+function screen_pos_to_world(x, y) {
+    return [((resolution_factor * x / canvas.width) * 2 - 1), (1 - (resolution_factor * y / canvas.height) * 2)];
+}
+
+var x, y, mousedown = false;
+// Mouse position tracking
+canvas.addEventListener('mousemove', (event) => {
+    // Get the bounding rectangle of the canvas
+    const rect = canvas.getBoundingClientRect();
+    // Calculate the mouse position relative to the canvas
+    x = event.clientX - rect.left;
+    y = event.clientY - rect.top;
+    [x, y] = screen_pos_to_world(x, y);
+});
+
+// Detect clicks on the canvas
+canvas.addEventListener('mousedown', (event) => {
+    const rect = canvas.getBoundingClientRect();
+    x = event.clientX - rect.left;
+    y = event.clientY - rect.top;
+    [x, y] = screen_pos_to_world(x, y);
+    console.log(x, y);
+    // createEllipseBody();
+    // bodies[bodies.length - 1].setTranslation(x, y);
+    mousedown = true;
+    // mouseJustDown = true;
+});
+
+// Detect clicks on the canvas
+canvas.addEventListener('mouseup', (event) => {
+    mousedown = false;
+});
+
+// detect mouse leaves canvas
+canvas.addEventListener('mouseleave', (event) => {
+    mousedown = false;
+});
 
 // -------------------------------------------------------------------------
 // 7) Drawing
 // -------------------------------------------------------------------------
 function draw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+    // fill background
+    ctx.fillStyle = "#f2f2f2";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.strokeStyle = "#333";
     ctx.lineWidth = 5;
 
@@ -395,6 +473,9 @@ function draw() {
     switch (selectMetric.value) {
         case "1":
         case "2":
+        case "4":
+        case "5":
+        case "6":
             // Draw bounding box
             // corners: [-1,-1], [-1,1], [1,1], [1,-1]
             let tl = worldToScreen(-1, 1);
@@ -423,64 +504,64 @@ function draw() {
     ctx.strokeStyle = "white";
     ctx.lineWidth = 3;
 
-    // for (let body_idx = 0; body_idx < bodies.length; body_idx++) {
-    //     const rb = bodies[body_idx];
-    //     const { x, y } = rb.translation();
-
-    //     // get ellipse matrix
-    //     const M = evaluations[body_idx];
-    //     const { eigenvalues, eigenvectors } = eigenDecomposition2x2(M);
-
-    //     // principal axis lengths
-    //     const lam1 = eigenvalues[0];
-    //     const lam2 = eigenvalues[1];
-    //     const a = lam1 > 1e-12 ? 1 / Math.sqrt(lam1) : 1e6;
-    //     const b = lam2 > 1e-12 ? 1 / Math.sqrt(lam2) : 1e6;
-    //     if (lam1 < 0 || lam2 < 0) {
-    //         console.error("Invalid ellipse shape", a, b, M);
-    //     }
-    //     const angle = Math.PI / 2 - Math.atan2(eigenvectors[1][1], eigenvectors[1][0]);
-    //     // or some consistent orientation from the eigenvectors
-
-    //     // incorporate scaleFactor
-    //     const ra = a * config.scaleFactor;
-    //     const rb_ = b * config.scaleFactor;
-
-    //     // draw on canvas
-    //     ctx.save();
-    //     // translate
-    //     const [sx, sy] = worldToScreen(x, y);
-    //     ctx.translate(sx, sy);
-    //     // rotate
-    //     ctx.rotate(angle);
-    //     // scale from world -> screen
-    //     ctx.scale(worldLengthToScreen(ra), worldLengthToScreen(rb_));
-    //     // draw ellipse
-    //     ctx.beginPath();
-    //     ctx.ellipse(0, 0, 1, 1, 0, 0, 2 * Math.PI);
-    //     ctx.fill();
-    //     ctx.restore();
-    //     ctx.stroke();
-    // }
-
-    ctx.strokeStyle = "black";
-
-    // draw all colliders:
     for (let body_idx = 0; body_idx < bodies.length; body_idx++) {
-        const t = bodies[body_idx].translation(); // {x, y}
-        const points = approximateEllipsePolygon(body_idx, config.ellipseSides);
+        const rb = bodies[body_idx];
+        const { x, y } = rb.translation();
 
-        // Now create a new polygon collider. The Rapier constructor expects an array of [x,y].
-        const vertArray = points.map(p => [t.x + p.x, t.y + p.y]);
-        for (let j = 0; j < vertArray.length; j++) {
-            const p1 = worldToScreen(vertArray[j][0], vertArray[j][1]);
-            const p2 = worldToScreen(vertArray[(j + 1) % vertArray.length][0], vertArray[(j + 1) % vertArray.length][1]);
-            ctx.beginPath();
-            ctx.moveTo(p1[0], p1[1]);
-            ctx.lineTo(p2[0], p2[1]);
-            ctx.stroke();
+        // get ellipse matrix
+        const M = evaluations[body_idx];
+        const { eigenvalues, eigenvectors } = eigenDecomposition2x2(M);
+
+        // principal axis lengths
+        const lam1 = eigenvalues[0];
+        const lam2 = eigenvalues[1];
+        const a = lam1 > 1e-12 ? Math.sqrt(lam1) : 1e6;
+        const b = lam2 > 1e-12 ? Math.sqrt(lam2) : 1e6;
+        if (lam1 < 0 || lam2 < 0) {
+            console.error("Invalid ellipse shape", a, b, M);
         }
+        const angle = Math.PI / 2 - Math.atan2(eigenvectors[1][1], eigenvectors[1][0]);
+        // or some consistent orientation from the eigenvectors
+
+        // incorporate scaleFactor
+        const ra = a * config.scaleFactor;
+        const rb_ = b * config.scaleFactor;
+
+        // draw on canvas
+        ctx.save();
+        // translate
+        const [sx, sy] = worldToScreen(x, y);
+        ctx.translate(sx, sy);
+        // rotate
+        ctx.rotate(angle);
+        // scale from world -> screen
+        ctx.scale(worldLengthToScreen(ra), worldLengthToScreen(rb_));
+        // draw ellipse
+        ctx.beginPath();
+        ctx.ellipse(0, 0, 1, 1, 0, 0, 2 * Math.PI);
+        ctx.fill();
+        ctx.restore();
+        ctx.stroke();
     }
+
+    // ctx.strokeStyle = "black";
+
+    // // draw all colliders:
+    // for (let body_idx = 0; body_idx < bodies.length; body_idx++) {
+    //     const t = bodies[body_idx].translation(); // {x, y}
+    //     const points = approximateEllipsePolygon(body_idx, config.ellipseSides);
+
+    //     // Now create a new polygon collider. The Rapier constructor expects an array of [x,y].
+    //     const vertArray = points.map(p => [t.x + p.x, t.y + p.y]);
+    //     for (let j = 0; j < vertArray.length; j++) {
+    //         const p1 = worldToScreen(vertArray[j][0], vertArray[j][1]);
+    //         const p2 = worldToScreen(vertArray[(j + 1) % vertArray.length][0], vertArray[(j + 1) % vertArray.length][1]);
+    //         ctx.beginPath();
+    //         ctx.moveTo(p1[0], p1[1]);
+    //         ctx.lineTo(p2[0], p2[1]);
+    //         ctx.stroke();
+    //     }
+    // }
 }
 
 // -------------------------------------------------------------------------
@@ -507,16 +588,18 @@ function updateMatrixPreview(m11Expr, m12Expr, m22Expr) {
     // Build a LaTeX string:
     // For instance: \(\begin{pmatrix} 0.1+x^2+y^2 & 0 \\ 0 & 0.1+x^2+y^2 \end{pmatrix}\)
 
-    function add_cdot(expr) {
-        return expr.replace(/([a-z0-9]+) *\* *([a-z0-9]+)/g, "$1 \\cdot $2");
+    function preprocess(expr) {
+        // Replace * with \cdot for LaTeX
+        // and replace ** with ^ for exponentiation
+        return expr.replace(/\*\*/g, "^").replace(/([a-z0-9]+) *\* *([a-z0-9]+)/g, "$1 \\cdot $2");
     }
 
-    m11Expr = add_cdot(m11Expr);
-    m12Expr = add_cdot(m12Expr);
-    m22Expr = add_cdot(m22Expr);
+    m11Expr = preprocess(m11Expr);
+    m12Expr = preprocess(m12Expr);
+    m22Expr = preprocess(m22Expr);
 
     const latex = `\\[
-    g(x, y) = \\begin{pmatrix}
+    g(x, y)^{-1} = \\begin{pmatrix}
         ${m11Expr} & ${m12Expr} \\\\
         ${m12Expr} & ${m22Expr}
     \\end{pmatrix}
@@ -665,20 +748,59 @@ function select_preset(selected) {
         RebuildMatrixFunc();
         setupWorld();
     }
+    else if (selected == 4) {
+        m11Input.value = rectangle_m11;
+        m12Input.value = rectangle_m12;
+        m22Input.value = rectangle_m22;
+        updateMatrixPreview(m11Input.value, m12Input.value, m22Input.value);
+        RebuildMatrixFunc();
+        setupWorld();
+    }
+    else if (selected == 5) {
+        m11Input.value = projected_saddle_m11;
+        m12Input.value = projected_saddle_m12;
+        m22Input.value = projected_saddle_m22;
+        updateMatrixPreview(m11Input.value, m12Input.value, m22Input.value);
+        RebuildMatrixFunc();
+        setupWorld();
+    }
+    else if (selected == 6) {
+        m11Input.value = wormhole_m11;
+        m12Input.value = wormhole_m12;
+        m22Input.value = wormhole_m22;
+        updateMatrixPreview(m11Input.value, m12Input.value, m22Input.value);
+        RebuildMatrixFunc();
+        setupWorld();
+    }
 }
 
-const projected_bell_m11 = "(-55.279225*(0.899986550100874*x - y)**2 - Math.exp(52.0448*x**2 - 26.7656*x*y + 14.87*y**2))*Math.exp(52.0448*x**2 - 26.7656*x*y + 14.87*y**2)/(37433.1730781839*(0.899986550100874*x - y)**2*(x - 0.25714000245942*y)**2 - (55.279225*(0.899986550100874*x - y)**2 + Math.exp(52.0448*x**2 - 26.7656*x*y + 14.87*y**2))*(677.16530176*(x - 0.25714000245942*y)**2 + Math.exp(52.0448*x**2 - 26.7656*x*y + 14.87*y**2)))"
-const projected_bell_m12 = "-0.25*(13.3828*x - 14.87*y)*(52.0448*x - 13.3828*y)*Math.exp(52.0448*x**2 - 26.7656*x*y + 14.87*y**2)/(37433.1730781839*(0.899986550100874*x - y)**2*(x - 0.25714000245942*y)**2 - (55.279225*(0.899986550100874*x - y)**2 + Math.exp(52.0448*x**2 - 26.7656*x*y + 14.87*y**2))*(677.16530176*(x - 0.25714000245942*y)**2 + Math.exp(52.0448*x**2 - 26.7656*x*y + 14.87*y**2)))"
-const projected_bell_m22 = "(-677.16530176*(x - 0.25714000245942*y)**2 - Math.exp(52.0448*x**2 - 26.7656*x*y + 14.87*y**2))*Math.exp(52.0448*x**2 - 26.7656*x*y + 14.87*y**2)/(37433.1730781839*(0.899986550100874*x - y)**2*(x - 0.25714000245942*y)**2 - (55.279225*(0.899986550100874*x - y)**2 + Math.exp(52.0448*x**2 - 26.7656*x*y + 14.87*y**2))*(677.16530176*(x - 0.25714000245942*y)**2 + Math.exp(52.0448*x**2 - 26.7656*x*y + 14.87*y**2)))"
+// const projected_bell_m11 = "(-55.279225*(0.899986550100874*x - y)**2 - Math.exp(52.0448*x**2 - 26.7656*x*y + 14.87*y**2))*Math.exp(52.0448*x**2 - 26.7656*x*y + 14.87*y**2)/(37433.1730781839*(0.899986550100874*x - y)**2*(x - 0.25714000245942*y)**2 - (55.279225*(0.899986550100874*x - y)**2 + Math.exp(52.0448*x**2 - 26.7656*x*y + 14.87*y**2))*(677.16530176*(x - 0.25714000245942*y)**2 + Math.exp(52.0448*x**2 - 26.7656*x*y + 14.87*y**2)))"
+// const projected_bell_m12 = "-0.25*(13.3828*x - 14.87*y)*(52.0448*x - 13.3828*y)*Math.exp(52.0448*x**2 - 26.7656*x*y + 14.87*y**2)/(37433.1730781839*(0.899986550100874*x - y)**2*(x - 0.25714000245942*y)**2 - (55.279225*(0.899986550100874*x - y)**2 + Math.exp(52.0448*x**2 - 26.7656*x*y + 14.87*y**2))*(677.16530176*(x - 0.25714000245942*y)**2 + Math.exp(52.0448*x**2 - 26.7656*x*y + 14.87*y**2)))"
+// const projected_bell_m22 = "(-677.16530176*(x - 0.25714000245942*y)**2 - Math.exp(52.0448*x**2 - 26.7656*x*y + 14.87*y**2))*Math.exp(52.0448*x**2 - 26.7656*x*y + 14.87*y**2)/(37433.1730781839*(0.899986550100874*x - y)**2*(x - 0.25714000245942*y)**2 - (55.279225*(0.899986550100874*x - y)**2 + Math.exp(52.0448*x**2 - 26.7656*x*y + 14.87*y**2))*(677.16530176*(x - 0.25714000245942*y)**2 + Math.exp(52.0448*x**2 - 26.7656*x*y + 14.87*y**2)))"
 
-const projected_quadratic_m11 = "(0.25*y**2 + 1.0)/(1.0*x**2 + 0.25*y**2 + 1.0)"
-const projected_quadratic_m12 = "-0.5*x*y/(1.0*x**2 + 0.25*y**2 + 1.0)"
-const projected_quadratic_m22 = "1.0*(x**2 + 1.0)/(1.0*x**2 + 0.25*y**2 + 1.0)"
+const projected_bell_m11 = "(-130.83699456*(0.899986012029654*x - y)**2 - Math.exp(40.0344*x**2 - 20.5888*x*y + 11.4384*y**2))*Math.exp(40.0344*x**2 - 20.5888*x*y + 11.4384*y**2)/(209699.409532295*(0.899986012029654*x - y)**2*(x - 0.257138860579901*y)**2 - (130.83699456*(0.899986012029654*x - y)**2 + Math.exp(40.0344*x**2 - 20.5888*x*y + 11.4384*y**2))*(1602.75318336*(x - 0.257138860579901*y)**2 + Math.exp(40.0344*x**2 - 20.5888*x*y + 11.4384*y**2)))"
+const projected_bell_m12 = "-(10.2944*x - 11.4384*y)*(40.0344*x - 10.2944*y)*Math.exp(40.0344*x**2 - 20.5888*x*y + 11.4384*y**2)/(209699.409532295*(0.899986012029654*x - y)**2*(x - 0.257138860579901*y)**2 - (130.83699456*(0.899986012029654*x - y)**2 + Math.exp(40.0344*x**2 - 20.5888*x*y + 11.4384*y**2))*(1602.75318336*(x - 0.257138860579901*y)**2 + Math.exp(40.0344*x**2 - 20.5888*x*y + 11.4384*y**2)))"
+const projected_bell_m22 = "(-1602.75318336*(x - 0.257138860579901*y)**2 - Math.exp(40.0344*x**2 - 20.5888*x*y + 11.4384*y**2))*Math.exp(40.0344*x**2 - 20.5888*x*y + 11.4384*y**2)/(209699.409532295*(0.899986012029654*x - y)**2*(x - 0.257138860579901*y)**2 - (130.83699456*(0.899986012029654*x - y)**2 + Math.exp(40.0344*x**2 - 20.5888*x*y + 11.4384*y**2))*(1602.75318336*(x - 0.257138860579901*y)**2 + Math.exp(40.0344*x**2 - 20.5888*x*y + 11.4384*y**2)))"
 
-const hyperbolic_m11 = "(-(x**2) - (y**2) + 1.0)"
+const projected_quadratic_m11 = "(4.0*y**2 + 1.0)/(4.0*x**2 + 4.0*y**2 + 1.0)"
+const projected_quadratic_m12 = "-4.0*x*y/(4.0*x**2 + 4.0*y**2 + 1.0)"
+const projected_quadratic_m22 = "(4.0*x**2 + 1.0)/(4.0*x**2 + 4.0*y**2 + 1.0)"
+
+const hyperbolic_m11 = "(-(x**2) - (y**2) + 0.95)**2"
 const hyperbolic_m12 = "0.0"
-const hyperbolic_m22 = "(-(x**2) - (y**2) + 1.0)"
+const hyperbolic_m22 = "(-(x**2) - (y**2) + 0.95)**2"
 
+const rectangle_m11 = "0.25 + 0 * x"
+const rectangle_m12 = "0.0 + 0 * x"
+const rectangle_m22 = "1.0 + 0 * x"
+
+const projected_saddle_m11 = "(4.0*y**2 + 1.0)/(4.0*x**2 + 4.0*y**2 + 1.0)"
+const projected_saddle_m12 = "4.0*x*y/(4.0*x**2 + 4.0*y**2 + 1.0)"
+const projected_saddle_m22 = "(4.0*x**2 + 1.0)/(4.0*x**2 + 4.0*y**2 + 1.0)"
+
+const wormhole_m11 = "1 + 15*Math.exp(-1 * (3*x**2 + 1000*y**4)**2)"
+const wormhole_m12 = "0"
+const wormhole_m22 = "1"
 
 // -------------------------------------------------------------------------
 // Kick it off
